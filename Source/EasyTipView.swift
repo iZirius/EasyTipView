@@ -98,6 +98,8 @@ public extension EasyTipView {
         let superview = superview ?? UIApplication.shared.windows.first!
         if let text = text {
             self.text = text
+            _contentSize = nil
+            _textSize = nil
         }
         
         presentingView = view
@@ -263,38 +265,41 @@ open class EasyTipView: UIView {
     fileprivate var autoDismissTimer: Timer? = nil
     public var text: String
     
-    // MARK: - Lazy variables -
-    
-    fileprivate lazy var textSize: CGSize = {
-        
-        [unowned self] in
-        
-        #if swift(>=4.2)
-        var attributes = [NSAttributedString.Key.font : self.preferences.drawing.font]
-        #else
-        var attributes = [NSAttributedStringKey.font : self.preferences.drawing.font]
-        #endif
-        
-        var textSize = self.text.boundingRect(with: CGSize(width: self.preferences.positioning.maxWidth, height: CGFloat.greatestFiniteMagnitude), options: NSStringDrawingOptions.usesLineFragmentOrigin, attributes: attributes, context: nil).size
-        
-        textSize.width = ceil(textSize.width)
-        textSize.height = ceil(textSize.height)
-        
-        if textSize.width < self.preferences.drawing.arrowWidth {
-            textSize.width = self.preferences.drawing.arrowWidth
+    // MARK: - Size variables -
+    fileprivate var _textSize: CGSize?
+    fileprivate var textSize: CGSize {
+        if _textSize == nil {
+            
+            #if swift(>=4.2)
+            var attributes = [NSAttributedString.Key.font : self.preferences.drawing.font]
+            #else
+            var attributes = [NSAttributedStringKey.font : self.preferences.drawing.font]
+            #endif
+            
+            var calcTextSize = self.text.boundingRect(with: CGSize(width: self.preferences.positioning.maxWidth, height: CGFloat.greatestFiniteMagnitude), options: NSStringDrawingOptions.usesLineFragmentOrigin, attributes: attributes, context: nil).size
+            
+            calcTextSize.width = ceil(calcTextSize.width)
+            calcTextSize.height = ceil(calcTextSize.height)
+            
+            if calcTextSize.width < self.preferences.drawing.arrowWidth {
+                calcTextSize.width = self.preferences.drawing.arrowWidth
+            }
+            _textSize = calcTextSize
+            return _textSize!
         }
-        
-        return textSize
-        }()
+        return _textSize!
+    }
     
-    fileprivate lazy var contentSize: CGSize = {
+    fileprivate var _contentSize: CGSize?
+    fileprivate  var contentSize: CGSize {
         
-        [unowned self] in
-        
-        var contentSize = CGSize(width: self.textSize.width + self.preferences.positioning.textHInset * 2 + self.preferences.positioning.bubbleHInset * 2, height: self.textSize.height + self.preferences.positioning.textVInset * 2 + self.preferences.positioning.bubbleVInset * 2 + self.preferences.drawing.arrowHeight)
-        
-        return contentSize
-        }()
+        if _contentSize == nil {
+            var contentSize = CGSize(width: self.textSize.width + self.preferences.positioning.textHInset * 2 + self.preferences.positioning.bubbleHInset * 2, height: self.textSize.height + self.preferences.positioning.textVInset * 2 + self.preferences.positioning.bubbleVInset * 2 + self.preferences.drawing.arrowHeight)
+            _contentSize = contentSize
+            return _contentSize!
+        }
+        return _contentSize!
+    }
     
     // MARK: - Static variables -
     
