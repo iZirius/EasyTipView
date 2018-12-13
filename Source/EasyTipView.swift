@@ -85,18 +85,21 @@ public extension EasyTipView {
     /**
      Presents an EasyTipView pointing to a particular UIView instance within the specified superview
      
+     - parameter text: Pass text to be shown in the tipView or nil if view already has everything
      - parameter animated:  Pass true to animate the presentation.
      - parameter view:      The UIView instance which the EasyTipView will be pointing to.
      - parameter superview: A view which is part of the UIView instances superview hierarchy. Ignore this parameter in order to display the EasyTipView within the main window.
      - parameter autoDismiss: Pass true to auto dismiss after duration set in preferences, default is false
      */
-    public func show(animated: Bool = true, forView view: UIView, withinSuperview superview: UIView? = nil, autoDismiss: Bool = false,  withCompletion completion: (() -> ())? = nil) {
+    public func show(withText text: String? = nil, animated: Bool = true, forView view: UIView, withinSuperview superview: UIView? = nil, autoDismiss: Bool = false,  withCompletion completion: (() -> ())? = nil) {
         
         precondition(superview == nil || view.hasSuperview(superview!), "The supplied superview <\(superview!)> is not a direct nor an indirect superview of the supplied reference view <\(view)>. The superview passed to this method should be a direct or an indirect superview of the reference view. To display the tooltip within the main window, ignore the superview parameter.")
         
         let superview = superview ?? UIApplication.shared.windows.first!
+        if let text = text {
+            self.text = text
+        }
         
-        self.text = text
         presentingView = view
         arrange(withinSuperview: superview)
         setNeedsDisplay()
@@ -121,10 +124,14 @@ public extension EasyTipView {
         if animated {
             UIView.animate(withDuration:  preferences.animating.showDuration, delay: 0, usingSpringWithDamping: preferences.animating.springDamping, initialSpringVelocity: preferences.animating.springVelocity, options:  [.curveEaseInOut], animations: animations) { [weak self] success in
                 if autoDismiss {
-                    self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: self?.preferences.animating.autoDismissDelayDuration ?? 0, repeats: false, block: { timer in
-                        timer.invalidate()
-                        self?.dismiss(withCompletion: completion)
-                    })
+                    if #available(iOS 10.0, *) {
+                        self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: self?.preferences.animating.autoDismissDelayDuration ?? 0, repeats: false, block: { timer in
+                            timer.invalidate()
+                            self?.dismiss(withCompletion: completion)
+                        })
+                    } else {
+                        // Fallback on earlier versions
+                    }
                 } else {
                     completion?()
                 }
@@ -156,13 +163,12 @@ public extension EasyTipView {
             self.transform = CGAffineTransform.identity
         }
     }
-    }
 }
 
 // MARK: - UIGestureRecognizerDelegate implementation
 
 extension EasyTipView: UIGestureRecognizerDelegate {
-
+    
     open override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         return preferences.animating.dismissOnTap
     }
@@ -255,7 +261,7 @@ open class EasyTipView: UIView {
     fileprivate var arrowTip = CGPoint.zero
     fileprivate(set) open var preferences: Preferences
     fileprivate var autoDismissTimer: Timer? = nil
-    public let text: String
+    public var text: String
     
     // MARK: - Lazy variables -
     
@@ -394,9 +400,9 @@ open class EasyTipView: UIView {
         
         let superviewFrame: CGRect
         if let scrollview = superview as? UIScrollView {
-          superviewFrame = CGRect(origin: scrollview.frame.origin, size: scrollview.contentSize)
+            superviewFrame = CGRect(origin: scrollview.frame.origin, size: scrollview.contentSize)
         } else {
-          superviewFrame = superview.frame
+            superviewFrame = superview.frame
         }
         
         var frame = computeFrame(arrowPosition: position, refViewFrame: refViewFrame, superviewFrame: superviewFrame)
