@@ -88,24 +88,21 @@ public extension EasyTipView {
      - parameter animated:  Pass true to animate the presentation.
      - parameter view:      The UIView instance which the EasyTipView will be pointing to.
      - parameter superview: A view which is part of the UIView instances superview hierarchy. Ignore this parameter in order to display the EasyTipView within the main window.
+     - parameter autoDismiss: Pass true to auto dismiss after duration set in preferences, default is false
      */
-    public func show(animated: Bool = true, forView view: UIView, withinSuperview superview: UIView? = nil) {
+    public func show(animated: Bool = true, forView view: UIView, withinSuperview superview: UIView? = nil, autoDismiss: Bool = false,  withCompletion completion: (() -> ())? = nil) {
         
         precondition(superview == nil || view.hasSuperview(superview!), "The supplied superview <\(superview!)> is not a direct nor an indirect superview of the supplied reference view <\(view)>. The superview passed to this method should be a direct or an indirect superview of the reference view. To display the tooltip within the main window, ignore the superview parameter.")
         
         let superview = superview ?? UIApplication.shared.windows.first!
         
-        let initialTransform = preferences.animating.showInitialTransform
-        let finalTransform = preferences.animating.showFinalTransform
-        let initialAlpha = preferences.animating.showInitialAlpha
-        let damping = preferences.animating.springDamping
-        let velocity = preferences.animating.springVelocity
-        
+        self.text = text
         presentingView = view
         arrange(withinSuperview: superview)
+        setNeedsDisplay()
         
-        transform = initialTransform
-        alpha = initialAlpha
+        transform = preferences.animating.showInitialTransform
+        alpha = preferences.animating.showInitialAlpha
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.delegate = self
@@ -114,16 +111,34 @@ public extension EasyTipView {
         superview.addSubview(self)
         
         let animations : () -> () = {
-            self.transform = finalTransform
+            self.transform =  self.preferences.animating.showFinalTransform
             self.alpha = 1
+            if !animated {
+                completion?()
+            }
         }
         
         if animated {
-            UIView.animate(withDuration: preferences.animating.showDuration, delay: 0, usingSpringWithDamping: damping, initialSpringVelocity: velocity, options: [.curveEaseInOut], animations: animations, completion: nil)
+            UIView.animate(withDuration:  preferences.animating.showDuration, delay: 0, usingSpringWithDamping: preferences.animating.springDamping, initialSpringVelocity: preferences.animating.springVelocity, options:  [.curveEaseInOut], animations: animations) { [weak self] success in
+                if autoDismiss {
+                    self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: self?.preferences.animating.autoDismissDelayDuration ?? 0, repeats: false, block: { timer in
+                        timer.invalidate()
+                        self?.dismiss(withCompletion: completion)
+                    })
+                } else {
+                    completion?()
+                }
+            }
         }else{
             animations()
         }
     }
+    
+    /// Will cancel the auto dimiss
+    public func cancelAutoDismiss() {
+        autoDismissTimer?.invalidate()
+    }
+    
     
     /**
      Dismisses the EasyTipView
@@ -132,18 +147,15 @@ public extension EasyTipView {
      */
     public func dismiss(withCompletion completion: (() -> ())? = nil){
         
-        let damping = preferences.animating.springDamping
-        let velocity = preferences.animating.springVelocity
-        
-        UIView.animate(withDuration: preferences.animating.dismissDuration, delay: 0, usingSpringWithDamping: damping, initialSpringVelocity: velocity, options: [.curveEaseInOut], animations: { 
+        UIView.animate(withDuration: preferences.animating.dismissDuration, delay: 0, usingSpringWithDamping: preferences.animating.springDamping, initialSpringVelocity: preferences.animating.springVelocity, options: [.curveEaseInOut], animations: {
             self.transform = self.preferences.animating.dismissTransform
             self.alpha = self.preferences.animating.dismissFinalAlpha
         }) { (finished) -> Void in
             completion?()
-            self.delegate?.easyTipViewDidDismiss(self)
             self.removeFromSuperview()
             self.transform = CGAffineTransform.identity
         }
+    }
     }
 }
 
@@ -206,6 +218,7 @@ open class EasyTipView: UIView {
             public var showDuration         = 0.7
             public var dismissDuration      = 0.7
             public var dismissOnTap         = true
+            public var autoDismissDelayDuration: TimeInterval  = 0.0
         }
         
         public var drawing      = Drawing()
@@ -241,6 +254,7 @@ open class EasyTipView: UIView {
     fileprivate weak var delegate: EasyTipViewDelegate?
     fileprivate var arrowTip = CGPoint.zero
     fileprivate(set) open var preferences: Preferences
+    fileprivate var autoDismissTimer: Timer? = nil
     public let text: String
     
     // MARK: - Lazy variables -
